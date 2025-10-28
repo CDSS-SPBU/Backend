@@ -32,7 +32,7 @@ async def get_doc_id(doc_id: str):
 
 
 @page_router.post("/createdoc")  # загрузка нового документа
-async def upload_doc(doc_id: str, title: str, file_data: str):
+async def upload_doc(doc_id: str, title: str, file_data: bytes):
     document = DocumentService.create_doc(doc_id, title, file_data)
     if not document:
         raise HTTPException(status_code=409, detail="Файл с таким названием уже существует")

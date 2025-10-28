@@ -6,7 +6,6 @@ medical_support_project/
 │   ├── upload_files.py        # Загрузка документов с сайта клинических рекомендаций
 │   ├── pdf_parser.py          # Парсер документов
 │   └── text_cleaner.py        # Исправление ошибок
-├── static/                    # Загруженные PDF
 ├── db/                        # Работа с БД
 │   ├── postgres.py            # Хранение исходных документов
 │   └── vector_db.py           # Qdrant/Weaviate/Chroma

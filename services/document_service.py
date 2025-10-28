@@ -1,29 +1,39 @@
-# временная мера
-DOCUMENTS = {"1": {"doc_id": "id1", "title": "t1", "file_data": "book1"},
-             "2": {"doc_id": "id2", "title": "t2", "file_data": "book2"},
-             "3": {"doc_id": "id3", "title": "t3", "file_data": "book3"}}
+import base64
+from db.postgres import DataManager
+
+data_base = DataManager()
 
 
 class DocumentService:
     @staticmethod
-    def create_doc(doc_id: str, title: str, file_data: str) -> bool:
-        if doc_id not in DOCUMENTS:
-            DOCUMENTS[doc_id] = {"doc_id": doc_id, "title": title, "file_data": file_data}
-            return True
-        return False
+    def create_doc(doc_id: str, title: str, file_data: bytes):
+        data_base.add_to_upload_list(doc_id, title, data=file_data)
+        data_base.upload_data()
 
     @staticmethod
     def get_all_docs():
-        return DOCUMENTS
+        return data_base.get_all_docs()
 
     @staticmethod
     def delete_doc(doc_id: str) -> bool:
-        if doc_id in DOCUMENTS:
-            del DOCUMENTS[doc_id]
+        ans = data_base.is_doc_exist(doc_id)
+        if ans:
+            data_base.delete_data(tuple(doc_id,))
             return True
         return False
 
     @staticmethod
     def get_doc(doc_id: str):
-        if doc_id in DOCUMENTS:
-            return DOCUMENTS[doc_id]
+        ans = data_base.is_doc_exist(doc_id)
+        if ans:
+            doc_data = {
+                'id_cr': ans[0],
+                'title': ans[1],
+                'MCB': ans[2],
+                'age_category': ans[3],
+                'developer': ans[4],
+                'placement_date': ans[5].isoformat() if ans[5] else None,
+                'data': base64.b64encode(ans[6]).decode() if ans[6] else None  #  тут не utf-8, но он стоит пока по умолчанию
+            }
+            return doc_data
+        return None
