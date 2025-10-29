@@ -1,23 +1,51 @@
 import datetime
 import psycopg2
-from psycopg2.extras import execute_values
+import logging
+from psycopg2.extras import execute_values, RealDictCursor
+from typing import Tuple
+
+logger = logging.getLogger(__name__)
+
+
+class DataConnection:
+    def __init__(self):
+        self.dbname = "clinical_recommendations"
+        self.user = "postgres"
+        self.password = "qwerty"
+        self.host = "localhost"
+        self.port = "5432"
 
 
 class DataManager:
     def __init__(self):
+        self.connection = DataConnection()
         self.upload_list = []
 
+    def _get_connection(self, dbname):
+        conn_config = {
+            'dbname': dbname or self.connection.dbname,
+            'user': self.connection.user,
+            'password': self.connection.password,
+            'host': self.connection.host,
+            'port': self.connection.port
+        }
+        return psycopg2.connect(**conn_config)
+
+    def _execute_query(self, query: str, params: Tuple = None, dbname: str = None, fetch: bool = False):
+        try:
+            with self._get_connection(dbname) as conn:
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(query, params)
+                    if fetch:
+                        return cur.fetchall()
+                    return cur
+        except psycopg2.Error as e:
+            logger.error(f"Ошибка в базе данных: {e}")
+            raise
+
     def create_table(self):
-        conn = psycopg2.connect(
-            dbname="clinical_recommendations",
-            user="postgres",
-            password="qwerty",
-            host="localhost",
-            port="5432"
-        )
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute('''
+        create_query = '''
                 CREATE TABLE IF NOT EXISTS documents (
                 id_cr VARCHAR(10) PRIMARY KEY NOT NULL UNIQUE,
                 title VARCHAR(400) NOT NULL,
@@ -27,122 +55,97 @@ class DataManager:
                 placement_date DATE,
                 data BYTEA NOT NULL
                 );
-            ''')
+            '''
 
-        cur.execute("""
+        check_constraint_query = """
             SELECT constraint_name
             FROM information_schema.table_constraints
             WHERE table_name = 'documents'
               AND constraint_name = 'chk_documents_age';
-        """)
+        """
 
-        if cur.fetchone() is None:
-            cur.execute("""
+        add_constraint_query = """
                 ALTER TABLE documents
                 ADD CONSTRAINT chk_documents_age CHECK (
                     age_category IN ('Взрослые', 'Дети', 'Взрослые, дети')
                 );
-            """)
-        cur.close()
-        conn.close()
+            """
+
+        self._execute_query(create_query)
+        if not self._execute_query(check_constraint_query, fetch=True):
+            self._execute_query(add_constraint_query)
 
     def creation_db(self) -> bool:
-        is_already_created = False
-        conn = psycopg2.connect(
-            dbname="postgres",
-            user="postgres",
-            password="qwerty",
-            host="localhost",
-            port="5432"
-        )
+        check_db_query = """SELECT 1 FROM pg_database WHERE datname = 'clinical_recommendations';"""
 
-        conn.autocommit = True
-        cur = conn.cursor()
-        cur.execute("""SELECT 1 FROM pg_database WHERE datname = 'clinical_recommendations';""")
-
-        if cur.fetchone() is None:
-            cur.execute("CREATE DATABASE clinical_recommendations;")
-            self.create_table()
-            is_already_created = True
-
-        cur.close()
-        conn.close()
-        return is_already_created
+        try:
+            is_already_created = self._execute_query(check_db_query, (self.connection.dbname,), dbname="postgres",
+                                                     fetch=True)
+            if not is_already_created:
+                self._execute_query("CREATE DATABASE clinical_recommendations;", dbname="postgres")
+                self.create_table()
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка при создании базы данных: {e}")
+            return False
 
     def add_to_upload_list(self, id_cr, title, MCB="NULL", age_category='Взрослые', developer='NULL',
                            placement_date=datetime.date.today(), data='NULL'):
         self.upload_list.append((id_cr, title, MCB, age_category, developer, placement_date, data))
 
     def upload_data(self):
-        conn = psycopg2.connect(
-            dbname="clinical_recommendations",
-            user="postgres",
-            password="qwerty",
-            host="localhost",
-            port="5432"
-        )
-        conn.autocommit = True
-        cur = conn.cursor()
-        execute_values(cur, """
-            INSERT INTO documents (id_cr, title, MCB, age_category, developer, placement_date, data)
-            VALUES %s""", self.upload_list)
+        insert_query = """ INSERT INTO documents (id_cr, title, MCB, age_category, developer, placement_date, data)
+            VALUES %s"""
 
-        cur.close()
-        conn.close()
-
-        self.upload_list = []
+        try:
+            with self._get_connection(dbname=self.connection.dbname) as conn:
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    execute_values(cur, insert_query, self.upload_list)
+            self.upload_list = []
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке данных: {e}")
+            raise
 
     def delete_data(self, tpl):
-        conn = psycopg2.connect(
-            dbname="clinical_recommendations",
-            user="postgres",
-            password="qwerty",
-            host="localhost",
-            port="5432"
-        )
-        conn.autocommit = True
-        cur = conn.cursor()
+        delete_query = "DELETE FROM documents WHERE id_cr IN %s"
 
-        query = f"DELETE FROM documents WHERE id_cr IN %s"
-        cur.execute(query, tpl)
+        try:
+            with self._get_connection(dbname=self.connection.dbname) as conn:
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(delete_query, (tpl,))
 
-        cur.close()
-        conn.close()
+        except Exception as e:
+            logger.error(f"Ошибка при удалении документов: {e}")
+            raise
 
     def is_doc_exist(self, doc_id):
-        conn = psycopg2.connect(
-            dbname="clinical_recommendations",
-            user="postgres",
-            password="qwerty",
-            host="localhost",
-            port="5432"
-        )
+        query = """SELECT id_cr, title, MCB, age_category, developer, placement_date FROM documents
+        WHERE id_cr = %s;"""
 
-        conn.autocommit = True
-        cur = conn.cursor()
-
-        cur.execute(f"""SELECT * FROM documents WHERE id_cr = '{doc_id}';""")
-        ans = cur.fetchone()
-
-        cur.close()
-        conn.close()
-        return ans
+        try:
+            with self._get_connection(dbname=self.connection.dbname) as conn:
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(query, (doc_id,))
+                    ans = cur.fetchone()
+                    return ans
+        except Exception as e:
+            logger.error(f"Ошибка получения файла: {e}")
+            return []
 
     def get_all_docs(self):
-        conn = psycopg2.connect(
-            dbname="clinical_recommendations",
-            user="postgres",
-            password="qwerty",
-            host="localhost",
-            port="5432"
-        )
+        query = """SELECT id_cr, title, MCB, age_category, developer, placement_date FROM documents;"""
 
-        conn.autocommit = True
-        cur = conn.cursor()
-
-        cur.execute(f"""SELECT id_cr, title, MCB, age_category, developer, placement_date FROM documents;""")
-        ans = cur.fetchall()
-
-        cur.close()
-        conn.close()
-        return ans
+        try:
+            with self._get_connection(dbname=self.connection.dbname) as conn:
+                conn.autocommit = True
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(query)
+                    ans = cur.fetchall()
+                    return [dict(row) for row in ans]
+        except Exception as e:
+            logger.error(f"Ошибка получения всех файлов: {e}")
+            return []

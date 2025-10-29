@@ -1,4 +1,3 @@
-import base64
 from db.postgres import DataManager
 
 data_base = DataManager()
@@ -18,7 +17,7 @@ class DocumentService:
     def delete_doc(doc_id: str) -> bool:
         ans = data_base.is_doc_exist(doc_id)
         if ans:
-            data_base.delete_data(tuple(doc_id,))
+            data_base.delete_data((doc_id,))
             return True
         return False
 
@@ -32,8 +31,7 @@ class DocumentService:
                 'MCB': ans[2],
                 'age_category': ans[3],
                 'developer': ans[4],
-                'placement_date': ans[5].isoformat() if ans[5] else None,
-                'data': base64.b64encode(ans[6]).decode() if ans[6] else None  #  тут не utf-8, но он стоит пока по умолчанию
+                'placement_date': ans[5].isoformat() if ans[5] else None
             }
             return doc_data
         return None
