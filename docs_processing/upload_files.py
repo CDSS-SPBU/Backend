@@ -71,14 +71,13 @@ def clinical_recommendations(data: list):
                     print(f"Ошибка в потоке: {e}")
         print(f"Загрузка данных в БД ({len(data_base.upload_list)} записей)")
         data_base.upload_data()
-    check_relevance()
+    # check_relevance()
 
 
 def download(line: list, data_base: DataManager):
     doc_id, title, MCB, age_category, developer, _, placement_data, _ = line
     try:
-        # в принципе можно брать только символы до нижнего подчеркивания
-        url = f"https://apicr.minzdrav.gov.ru/api.ashx?op=GetClinrecPdf&id={doc_id}"
+        url = f"https://apicr.minzdrav.gov.ru/api.ashx?op=GetClinrecPdf&id={doc_id[:-2]}"
         response = requests.get(url)
 
         if response.status_code == 200:
@@ -92,11 +91,11 @@ def download(line: list, data_base: DataManager):
         print(e)
 
 
-def check_relevance():
-    # не найдено по каким параметрам именно эти файлы отсутствуют в актуальных данных на момент 28.10.25
-    to_delete = ('1101212_1', '140_1', '142_1', '163_2', '171_2', '190_2', '258_2', '324_2', '326_4', '328_2', '45_1',
-                 '504_2', '546_3', '578_1', '589_2', '591_1', '634_1', '646_1', '649_1', '658_1', '659_1', '666_1',
-                 '667_1', '689_1', '690_2', '692_1', '693_1', '701_1', '705_1', '706_1', '707_1', '717_2', '727_1',
-                 '73_9')
-    data_base = DataManager()
-    data_base.delete_data(to_delete)
+# def check_relevance():
+#     # не найдено по каким параметрам именно эти файлы отсутствуют в актуальных данных на момент 28.10.25
+#     to_delete = ('1101212_1', '140_1', '142_1', '163_2', '171_2', '190_2', '258_2', '324_2', '326_4', '328_2', '45_1',
+#                  '504_2', '546_3', '578_1', '589_2', '591_1', '634_1', '646_1', '649_1', '658_1', '659_1', '666_1',
+#                  '667_1', '689_1', '690_2', '692_1', '693_1', '701_1', '705_1', '706_1', '707_1', '717_2', '727_1',
+#                  '73_9')
+#     data_base = DataManager()
+#     data_base.delete_data(to_delete)
