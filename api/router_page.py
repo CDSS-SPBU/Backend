@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Form, File, UploadFile
+from fastapi import APIRouter, HTTPException, Form, File, UploadFile, Query
 from services.document_service import DocumentService
+from docs_processing.pageable import Pageable, PaginatedResponse
 
 
 page_router = APIRouter()
@@ -13,9 +14,25 @@ async def root():
     }
 
 
-@page_router.get("/doclist")  # получение всех документов
-async def get_docs():
-    return DocumentService.get_all_docs()
+# @page_router.get("/doclist")  # получение всех документов
+# async def get_docs():
+#     return DocumentService.get_all_docs()
+
+
+@page_router.get("/doclist/paginated")  # получение всех документов с пагинацией
+async def get_docs_paginated(
+        page: int = Query(0, ge=0, description="Номер страницы (начинается с 0)"),
+        size: int = Query(10, ge=1, le=100, description="Размер страницы (1-100)")
+):
+    docs = DocumentService.get_all_docs(page=page, size=size)
+    total = DocumentService.get_total_documents()
+
+    return PaginatedResponse(
+        items=docs,
+        total=total,
+        pageable=Pageable(page=page, size=size),
+        total_pages=(total + size - 1) // size
+    )
 
 
 @page_router.delete("/doclist/{doc_id}")  # удаление документа по id
@@ -35,6 +52,9 @@ async def get_doc_id(doc_id: str):
 @page_router.post("/createdoc")  # загрузка нового документа
 async def upload_doc(doc_id: str = Form(..., description="ID документа"),
                      title: str = Form(..., description="Навзвание документа"),
+                     mcb: str = Form("NULL", description="МКБ-10"),
+                     age_category: str = Form("Взрослые", description="Возрастная категория"),
+                     developer: str = Form("NULL", description="Разработчик"),
                      file: UploadFile = File(..., description="PDF файл")):
 
     if not file.filename.lower().endswith('.pdf'):
@@ -46,11 +66,14 @@ async def upload_doc(doc_id: str = Form(..., description="ID документа"
 
     file_data = await file.read()
     try:
-        DocumentService.create_doc(doc_id, title, file_data)
+        DocumentService.create_doc(doc_id, title, mcb, age_category, developer, file_data)
         return {
             "message": "Новый документ загружен",
             "doc_id": doc_id,
-            "title": title
+            "title": title,
+            "MCB": mcb,
+            "age_category": age_category,
+            "developer": developer
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка в загрузке документе: {str(e)}")

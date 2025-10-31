@@ -82,7 +82,9 @@ class DataManager:
             is_already_created = self._execute_query(check_db_query, (self.connection.dbname,), dbname="postgres",
                                                      fetch=True)
             if not is_already_created:
-                self._execute_query("CREATE DATABASE clinical_recommendations;", dbname="postgres")
+                '''CREATE DATABASE не может выполняться внутри блока транзакции
+                надеемся, что бд уже создана'''
+                # self._execute_query("CREATE DATABASE clinical_recommendations;", dbname="postgres")
                 self.create_table()
                 return True
             return False
@@ -122,7 +124,7 @@ class DataManager:
             raise
 
     def is_doc_exist(self, doc_id):
-        query = """SELECT id_cr, title, MCB, age_category, developer, placement_date FROM documents
+        query = """SELECT id_cr, title, MCB, age_category, developer, placement_date, data FROM documents
         WHERE id_cr = %s;"""
 
         try:
@@ -148,4 +150,23 @@ class DataManager:
                     return [dict(row) for row in ans]
         except Exception as e:
             logger.error(f"Ошибка получения всех файлов: {e}")
+            return []
+
+    def get_docs_paginated(self, page: int = 0, size: int = 10):
+        query = """
+            SELECT id_cr, title, MCB, age_category, developer, placement_date 
+            FROM documents 
+            ORDER BY id_cr
+            LIMIT %s OFFSET %s;
+        """
+
+        try:
+            with self._get_connection(dbname=self.connection.dbname) as conn:
+                conn.autocommit = True
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(query, (size, page * size))
+                    ans = cur.fetchall()
+                    return [dict(row) for row in ans]
+        except Exception as e:
+            logger.error(f"Ошибка получения файлов с пагинацией: {e}")
             return []
