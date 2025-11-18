@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=postgresql://postgres:qwerty@db:5432/clinical_recommendations
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=clinical_recommendations
+      - DB_USER=postgres
+      - DB_PASSWORD=qwerty
+    depends_on:
+      - db
+    volumes:
+      - ./logs:/var/log/app
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=clinical_recommendations
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=qwerty
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  postgres_data:

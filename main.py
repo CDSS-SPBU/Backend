@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware # Yulia added this thing
 from api.router_socket import socket_router
 from api.router_page import page_router
-from docs_processing.upload_files import minzdrav_excel
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 origins = ["*"] # Yulia added this thing
 
@@ -17,6 +20,3 @@ app.add_middleware( # Yulia added this thing |
     allow_methods=["*"],
     allow_headers=["*"],
 ) # Yulia added this thing ^
-
-# создание базы данных
-# minzdrav_excel()
