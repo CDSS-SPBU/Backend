@@ -1,13 +1,17 @@
 import fastapi
 import json
 import requests
+import httpx, logging, asyncio, asyncpg
 from fastapi import WebSocket, WebSocketDisconnect
 from services.chat_service import ChatSessionManager
 
 socket_router = fastapi.APIRouter()
 session_manager = ChatSessionManager()
 
+logger = logging.getLogger("example")
+# сделать через env
 EMBEDDING_SERVICE_URL = "http://localhost:8000/embed"
+RERANK_SERVICE_URL = "http://localhost:8001/rerank"
 
 
 @socket_router.websocket("/ws/chat")
@@ -51,24 +55,78 @@ async def websocket_chat(websocket: WebSocket):
         session_manager.remove_session(session_id)
 
 
-def get_response(user_query):
+async def get_response(user_query: str) -> str:
+    # получение эмбеддинга
     try:
-        embed_request = {
-            "text": [user_query],
-            "task": "retrival.query",
-            "dimension": 1024
-        }
-        response = requests.post(EMBEDDING_SERVICE_URL, json=embed_request)
-        response.raise_for_status()
-        embedding_data = response.json()
-
-        embedding = embedding_data["embedding"][0]
-
-        response_text = f"Эмбеддинг получен. Размер: {len(embedding)}"
-    except requests.exceptions.RequestException as e:
-        print(f"Ошибка при вызове embedding-service: {e}")
-        response_text = "Ошибка при генерации эмбеддинга"
+        async with httpx.AsyncClient() as client:  # ассинхронный клиент, не блокирует событийный цикл
+            embed_request = {
+                "texts": [user_query],
+                "metadata": [{}],
+                "task": "retrieval.query",
+                "dimensions": 1024
+            }
+            response = await client.post(EMBEDDING_SERVICE_URL, json=embed_request, timeout=30.0)
+            response.raise_for_status()
+            embedding_data = response.json()
+            embedding = embedding_data["embedding"][0]
+            # NOTE: убрать
+            print(len(embedding))
+            logger.info(f"Эмбеддинг получен. Размер: {len(embedding)}")
     except Exception as e:
-        print(f"Ошибка обработки эмбеддинга: {e}")
-        response_text = "Ошибка обработки"
-    return response_text
+        logger.error(f"Ошибка при генерации эмбеддинга: {e}")
+
+    # db retrieval
+    try:
+        # Database connection parameters
+        conn = await asyncpg.connect(
+            host='localhost',
+            port=5433,
+            database='rag',
+            user='dev',
+            password='dev_password'
+        )
+
+        embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+        # Query to find similar embeddings using cosine similarity
+        query = """
+            SELECT id, content, metadata->>'document_name' as document_name, metadata->>'source_url' as source_url,
+                   1-(embedding <=> $1::vector) as similarity
+            FROM chunks
+            ORDER BY similarity DESC
+            LIMIT 3;
+        """
+
+        # Execute query with the generated embedding
+        db_results = await conn.fetch(query, embedding_str)
+        texts_for_rerank = [record['content'] for record in db_results]
+
+        print(texts_for_rerank)
+        # Close the connection
+        await conn.close()
+
+        # Log and return results
+        logger.info(f"Found {len(db_results)} similar embeddings")
+
+    except asyncpg.PostgresError as e:
+        logger.error(f"Database error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error during database query: {e}")
+        return None
+
+    # rerank
+    try:
+        async with httpx.AsyncClient() as client:  # ассинхронный клиент, не блокирует событийный цикл
+            rerank_request = {
+                "query": user_query,
+                "passages": texts_for_rerank,
+            }
+            response = await client.post(RERANK_SERVICE_URL, json=rerank_request, timeout=30.0)
+            response.raise_for_status()
+            rerank_data = response.json()
+
+            # NOTE: убрать
+            logger.info("Rerank получен")
+            return rerank_data
+    except Exception as e:
+        logger.error(f"Ошибка при rerank: {e}")
