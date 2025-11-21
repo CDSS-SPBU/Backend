@@ -22,10 +22,12 @@ async def root():
 @page_router.get("/doclist/paginated")  # получение всех документов с пагинацией
 async def get_docs_paginated(
         page: int = Query(0, ge=0, description="Номер страницы (начинается с 0)"),
-        size: int = Query(10, ge=1, le=100, description="Размер страницы (1-100)")
+        size: int = Query(10, ge=1, le=100, description="Размер страницы (1-100)"),
+        search: str | None = Query(None, max_length=255, description="Поиск по ID или названию")
 ):
-    docs = DocumentService.get_all_docs(page=page, size=size)
-    total = DocumentService.get_total_documents()
+    search_value = search.strip() if search else None
+    docs = DocumentService.get_all_docs(page=page, size=size, search=search_value)
+    total = DocumentService.get_total_documents(search=search_value)
 
     return PaginatedResponse(
         items=docs,

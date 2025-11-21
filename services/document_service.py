@@ -16,13 +16,14 @@ class DocumentService:
     #     return data_base.get_all_docs()
 
     @staticmethod
-    def get_all_docs(page: int = 0, size: int = 10) -> List[Dict]:
-        return data_base.get_docs_paginated(page=page, size=size)
+    def get_all_docs(page: int = 0, size: int = 10, search: str | None = None) -> List[Dict]:
+        normalized_search = search.strip() if isinstance(search, str) else None
+        return data_base.get_docs_paginated(page=page, size=size, search=normalized_search)
 
     @staticmethod
-    def get_total_documents() -> int:
-        all_docs = data_base.get_all_docs()
-        return len(all_docs)
+    def get_total_documents(search: str | None = None) -> int:
+        normalized_search = search.strip() if isinstance(search, str) else None
+        return data_base.get_documents_total(search=normalized_search)
 
     @staticmethod
     def delete_doc(doc_id: str) -> bool:

@@ -12,6 +12,15 @@ services:
       - DB_NAME=clinical_recommendations
       - DB_USER=postgres
       - DB_PASSWORD=qwerty
+      - EMBEDDING_SERVICE_URL=${EMBEDDING_SERVICE_URL:-http://host.docker.internal:8000/embed}
+      - RERANK_SERVICE_URL=${RERANK_SERVICE_URL:-http://host.docker.internal:8001/rerank}
+      - VECTOR_DB_HOST=${VECTOR_DB_HOST:-host.docker.internal}
+      - VECTOR_DB_PORT=${VECTOR_DB_PORT:-5433}
+      - VECTOR_DB_NAME=${VECTOR_DB_NAME:-rag}
+      - VECTOR_DB_USER=${VECTOR_DB_USER:-dev}
+      - VECTOR_DB_PASSWORD=${VECTOR_DB_PASSWORD:-dev_password}
+      - LLM_SERVICE_URL=${LLM_SERVICE_URL:-http://host.docker.internal:8003/generate}
+      - RAG_RETRIEVAL_LIMIT=${RAG_RETRIEVAL_LIMIT:-20}
     depends_on:
       - db
     volumes:
@@ -27,7 +36,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
 
 volumes:
   postgres_data:
+

@@ -24,4 +24,4 @@ RUN mkdir -p /var/log/app
 EXPOSE 8002
 
 # Запуск скрипта инициализации
-CMD ["sh", "-c", "python init_db.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "python -m db.init_db && uvicorn main:app --host 0.0.0.0 --port 8002"]
